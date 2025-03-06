@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>French Language Learning Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .chat-container { width: 80%; max-width: 600px; margin: 20px auto; text-align: left; }
+        .bubble { padding: 10px; margin: 5px; border-radius: 10px; max-width: 70%; }
+        .user { background: #007bff; color: white; align-self: flex-end; }
+        .ai { background: #f1f1f1; color: black; align-self: flex-start; display: flex; align-items: center; }
+        .chat-box { display: flex; flex-direction: column; gap: 10px; }
+        button { padding: 10px 15px; margin: 10px; cursor: pointer; }
+        
+        /* Updated audio level indicator with 5 segments */
+        .level-indicator {
+            display: flex;
+            gap: 2px;
+            width: 100px;
+            height: 20px;
+            margin: 10px auto;
+        }
+        .level-bar {
+            flex: 1;
+            background: #ccc;
+            border-radius: 2px;
+        }
+        .level-bar.active-1 { background: #a7e8a0; }
+        .level-bar.active-2 { background: #7ed475; }
+        .level-bar.active-3 { background: #5dc157; }
+        .level-bar.active-4 { background: #4a9c44; }
+        .level-bar.active-5 { background: #2e7729; }
+        .play-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        
+        .language-level {
+            margin: 10px auto;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .level-btn {
+            padding: 5px 12px;
+            border-radius: 15px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .level-btn.active {
+            background-color: #4a9c44;
+            color: white;
+        }
+        
+        .level-btn.beginner {
+            background-color: #a7e8a0;
+            color: #333;
+        }
+        
+        .level-btn.intermediate {
+            background-color: #5dc157;
+            color: white;
+        }
+        
+        .level-btn.advanced {
+            background-color: #2e7729;
+            color: white;
+        }
+        
+        .learning-tip {
+            background-color: #f8f9fa;
+            border-left: 4px solid #4a9c44;
+            padding: 10px;
+            margin: 10px 0;
+            font-style: italic;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Apprenez le Français - Chat Vocal</h2>
+    
+    <div class="language-level">
+        <button id="level-beginner" class="level-btn beginner active">Débutant</button>
+        <button id="level-intermediate" class="level-btn intermediate">Intermédiaire</button>
+        <button id="level-advanced" class="level-btn advanced">Avancé</button>
+    </div>
+    
+    <div class="chat-container">
+        <div id="chat-box" class="chat-box">
+            <div class="learning-tip">
+                Bonjour! Je suis votre tuteur de français. Parlez-moi en français, et je vous aiderai à améliorer votre prononciation et votre grammaire.
+            </div>
+        </div>
+    </div>
+
+    <!-- Replace simple indicator with multi-segment level indicator -->
+    <div id="level-indicator" class="level-indicator">
+        <div class="level-bar" id="level-1"></div>
+        <div class="level-bar" id="level-2"></div>
+        <div class="level-bar" id="level-3"></div>
+        <div class="level-bar" id="level-4"></div>
+        <div class="level-bar" id="level-5"></div>
+    </div>
+
+    <button id="start-btn">🎤 Commencer à parler</button>
+    <button id="stop-btn" disabled>⏹️ Arrêter</button>
+
+    <script>
+        // Store audio responses for playback
+        const audioResponses = new Map();
+        let audioResponseCounter = 0;
+        
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioContext;
+        let analyzer;
+        let microphone;
+        let animationId;
+
+        // Check for supported MIME types
+        function getSupportedMimeType() {
+            const types = [
+                'audio/webm',
+                'audio/webm;codecs=opus',
+                'audio/ogg;codecs=opus',
+                'audio/wav',
+                'audio/mp3',
+                ''  // empty string = browser default
+            ];
+            
+            for (const type of types) {
+                if (type === '' || MediaRecorder.isTypeSupported(type)) {
+                    console.log('Using MIME type:', type || 'browser default');
+                    return type;
+                }
+            }
+            throw new Error('No supported audio MIME type found');
+        }
+
+        // Update volume meter with audio levels
+        function updateVolumeMeter(analyser) {
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
+            function draw() {
+                animationId = requestAnimationFrame(draw);
+                
+                // Get audio data
+                analyser.getByteFrequencyData(dataArray);
+                
+                // Calculate average volume
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                }
+                const average = sum / dataArray.length;
+                
+                // Map the average (0-255) to level bars (1-5)
+                const level = Math.ceil((average / 255) * 5);
+                
+                // Update level bars
+                for (let i = 1; i <= 5; i++) {
+                    const bar = document.getElementById(`level-${i}`);
+                    if (i <= level) {
+                        bar.className = `level-bar active-${i}`;
+                    } else {
+                        bar.className = 'level-bar';
+                    }
+                }
+            }
+            draw();
+        }
+
+        document.getElementById("start-btn").addEventListener("click", async () => {
+            try {
+                // Initialize audio context on first user interaction
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    // "Warm up" the audio context with silent audio
+                    const silentAudio = audioContext.createBuffer(1, 1, 22050);
+                    const silentSource = audioContext.createBufferSource();
+                    silentSource.buffer = silentAudio;
+                    silentSource.connect(audioContext.destination);
+                    silentSource.start();
+                    console.log("Audio context initialized on user interaction");
+                }
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: true
+                });
+                
+                // Set up audio context for level visualization
+                analyzer = audioContext.createAnalyser();
+                analyzer.fftSize = 256;
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyzer);
+                
+                // Start visualizing the audio levels
+                updateVolumeMeter(analyzer);
+                
+                // Use a supported MIME type
+                const mimeType = getSupportedMimeType();
+                const options = mimeType ? { mimeType } : {};
+                
+                mediaRecorder = new MediaRecorder(stream, options);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstart = () => {
+                    console.log("Recording started");
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    // Stop audio visualization
+                    if (animationId) {
+                        cancelAnimationFrame(animationId);
+                        animationId = null;
+                    }
+                    
+                    // Reset level indicators
+                    for (let i = 1; i <= 5; i++) {
+                        document.getElementById(`level-${i}`).className = 'level-bar';
+                    }
+                    
+                    console.log("Recording stopped, chunks:", audioChunks.length);
+                    
+                    if (audioChunks.length === 0) {
+                        console.error("No audio data recorded");
+                        addMessage("Error: No audio recorded", "ai");
+                        return;
+                    }
+                    
+                    // Use the same MIME type for blob creation or fallback to generic audio
+                    const audioBlob = new Blob(audioChunks, { 
+                        type: mediaRecorder.mimeType || 'audio/webm' 
+                    });
+                    console.log("Blob created, size:", audioBlob.size, "type:", audioBlob.type);
+                    
+                    const formData = new FormData();
+                    formData.append("audio", audioBlob, "recording.webm");
+                    formData.append("level", currentLevel); // Add language level to request
+
+                    // Display user message (loading state)
+                    addMessage("⏳ Transcription en cours...", "user");
+
+                    try {
+                        // Send audio to backend
+                        const response = await fetch("/transcribe", {
+                            method: "POST",
+                            body: formData,
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Server responded with ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        console.log("Received response:", data);
+                        
+                        document.querySelector("#chat-box").lastChild.remove(); // Remove "Transcription en cours..."
+                        addMessage(data.text || "No transcription received", "user");
+                        
+                        // Store the audio response for later playback
+                        const audioId = `audio-${audioResponseCounter++}`;
+                        audioResponses.set(audioId, data.audio);
+                        
+                        // Add message with play button
+                        addMessageWithAudio(data.response || "No response received", "ai", audioId);
+                    } catch (error) {
+                        console.error("Error sending audio:", error);
+                        addMessage("Error: " + error.message, "ai");
+                    }
+                };
+
+                // Request data every second and also when recording is stopped
+                mediaRecorder.start(1000);
+                document.getElementById("start-btn").disabled = true;
+                document.getElementById("stop-btn").disabled = false;
+            } catch (error) {
+                console.error("Error accessing microphone:", error);
+                addMessage("Error accessing microphone: " + error.message, "ai");
+            }
+        });
+
+        document.getElementById("stop-btn").addEventListener("click", () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            document.getElementById("start-btn").disabled = false;
+            document.getElementById("stop-btn").disabled = true;
+        });
+
+        function addMessage(text, sender) {
+            const chatBox = document.getElementById("chat-box");
+            const bubble = document.createElement("div");
+            bubble.classList.add("bubble", sender);
+            bubble.textContent = text;
+            chatBox.appendChild(bubble);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function addMessageWithAudio(text, sender, audioId) {
+            const chatBox = document.getElementById("chat-box");
+            const bubble = document.createElement("div");
+            bubble.classList.add("bubble", sender);
+            
+            // Add text content
+            const textSpan = document.createElement("span");
+            textSpan.textContent = text;
+            bubble.appendChild(textSpan);
+            
+            // Add play button
+            const playButton = document.createElement("button");
+            playButton.textContent = "🔊 Play";
+            playButton.classList.add("play-button");
+            playButton.addEventListener("click", () => {
+                playResponseAudio(audioId);
+            });
+            bubble.appendChild(playButton);
+            
+            chatBox.appendChild(bubble);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function playResponseAudio(audioId) {
+            try {
+                const base64Audio = audioResponses.get(audioId);
+                if (!base64Audio) {
+                    console.error("No audio found for ID:", audioId);
+                    return;
+                }
+                
+                // Create audio element and set its source
+                const audio = new Audio("data:audio/mp3;base64," + base64Audio);
+                
+                // Debug the audio element
+                console.log("Audio element created:", !!audio);
+                
+                // Add event listeners to track audio playback
+                audio.onplay = () => console.log("Audio playback started");
+                audio.onended = () => console.log("Audio playback ended");
+                audio.onerror = (e) => console.error("Audio playback error:", e);
+                
+                // Play the audio with explicit user interaction
+                audio.play().catch(error => {
+                    console.error("Audio playback failed:", error);
+                });
+            } catch (error) {
+                console.error("Error playing audio:", error);
+            }
+        }
+
+        // Original playAudio function (kept for backward compatibility)
+        function playAudio(base64Audio) {
+            try {
+                // Instead of autoplaying, store for later manual playback
+                const audioId = `audio-${audioResponseCounter++}`;
+                audioResponses.set(audioId, base64Audio);
+                console.log("Audio stored with ID:", audioId);
+            } catch (error) {
+                console.error("Error processing audio:", error);
+            }
+        }
+
+        // Add language level functionality
+        let currentLevel = "beginner";
+        
+        document.getElementById("level-beginner").addEventListener("click", () => setLanguageLevel("beginner"));
+        document.getElementById("level-intermediate").addEventListener("click", () => setLanguageLevel("intermediate"));
+        document.getElementById("level-advanced").addEventListener("click", () => setLanguageLevel("advanced"));
+        
+        function setLanguageLevel(level) {
+            currentLevel = level;
+            
+            // Update UI
+            document.querySelectorAll(".level-btn").forEach(btn => btn.classList.remove("active"));
+            document.getElementById(`level-${level}`).classList.add("active");
+            
+            // Add language level to session storage
+            sessionStorage.setItem("languageLevel", level);
+            
+            // Add notification to chat
+            addMessage(`Niveau changé à: ${getDisplayLevel(level)}`, "ai");
+        }
+        
+        function getDisplayLevel(level) {
+            switch(level) {
+                case "beginner": return "Débutant";
+                case "intermediate": return "Intermédiaire";
+                case "advanced": return "Avancé";
+                default: return "Débutant";
+            }
+        }
+    </script>
+
+</body>
+</html>
