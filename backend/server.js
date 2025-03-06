@@ -31,7 +31,8 @@ if (!process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_HOST || 
 }
 
 const app = express();
-const port = 3001;
+// Use PORT from environment variable or fall back to 3001
+const port = process.env.PORT || 3001;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const pool = new Pool({
   connectionString: `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`,
