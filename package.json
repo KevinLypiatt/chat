@@ -4,7 +4,7 @@
   "main": "backend/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "NODE_OPTIONS=--openssl-legacy-provider PORT=3000 npm run build:react && PORT=3000 node backend/server.js",
+    "start": "NODE_OPTIONS=--openssl-legacy-provider npm run build:react && node backend/server.js",
     "build:react": "echo 'Starting React build...' && cd chat-app && npm install && npm run build && echo 'React build completed.'"
   },
   "keywords": [],

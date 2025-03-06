@@ -31,8 +31,8 @@ if (!process.env.DB_USER || !process.env.DB_PASSWORD || !process.env.DB_HOST || 
 }
 
 const app = express();
-// Use PORT from environment variable or fall back to 3001
-const port = process.env.PORT || 3001;
+// Use PORT from environment variable or fall back to 10000 (Render's common port)
+const port = process.env.PORT || 10000;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const pool = new Pool({
   connectionString: `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`,
@@ -261,6 +261,8 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+// Make sure to log that we're ready to accept requests
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
+  console.log(`PORT environment variable: ${process.env.PORT}`);
 });
