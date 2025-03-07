@@ -41,6 +41,10 @@ const pool = new Pool({
   }
 });
 
+// Log the port early in the process
+console.log('Using port:', port);
+console.log('PORT environment variable:', process.env.PORT);
+
 // Configure Multer for audio file uploads with specific destination and filename
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -265,4 +269,5 @@ app.post('/api/chat', async (req, res) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
   console.log(`PORT environment variable: ${process.env.PORT}`);
+  console.log(`Server is listening on all interfaces (0.0.0.0:${port})`);
 });

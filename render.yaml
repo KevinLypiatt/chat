@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: french-learning-chat
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: node backend/server.js
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /
